@@ -9,6 +9,7 @@ import (
 	"time"
 )
 
+// Tragon defines a Tragon server.
 type Tragon struct {
 	addr       string
 	timeout    int
@@ -17,6 +18,7 @@ type Tragon struct {
 	log        *log.Logger
 }
 
+// Replies defines the SMTP replies for a Tragon server.
 type Replies struct {
 	Reply220 string
 	Reply250 string
@@ -25,11 +27,14 @@ type Replies struct {
 }
 
 const (
-	DefaultAddr    = ":2525" // Default listening address.
-	DefaultTimeout = 60      // Default connection timeout.
+	// DefaultAddr is the default listening address for the SMTP server.
+	DefaultAddr = ":2525"
+	// DefaultTimeout is the default timeout for the SMTP session.
+	DefaultTimeout = 60
 )
 
-var DefaultReplies Replies = Replies{
+// DefaultReplies are the default messages for different SMTP replies.
+var DefaultReplies = Replies{
 	Reply220: "Welcome to Tragon SMTP server.", // Default greeting message.
 	Reply250: "Ok, I'll swallow that.",         // Default OK message.
 	Reply354: "Give it to me...",               // Default data message.
@@ -47,29 +52,28 @@ func New(addr string, timeout int, replies Replies, logger *log.Logger, handleFu
 	}
 }
 
-// ListenAndServes binds to the configured port and handles incomming connections.
-func (t *Tragon) ListenAndServe() {
+// ListenAndServe binds to the configured port and handles incomming connections.
+func (t *Tragon) ListenAndServe() error {
 	tcpAddr, err := net.ResolveTCPAddr("tcp", t.addr)
 	if err != nil {
-		t.log.Fatal(err)
+		return err
 	}
 
 	listener, err := net.ListenTCP("tcp", tcpAddr)
 	if err != nil {
-		t.log.Fatal(err)
+		return err
 	}
 
 	t.addr = listener.Addr().String()
 
-	go func() {
-		for {
-			conn, err := listener.Accept()
-			if err != nil {
-				continue
-			}
-			go t.handleClient(conn)
+	for {
+		conn, err := listener.Accept()
+		if err != nil {
+			continue
 		}
-	}()
+
+		go t.handleClient(conn)
+	}
 }
 
 // handleClient handles a client connection using standard SMTP commands.
@@ -80,7 +84,7 @@ func (t *Tragon) handleClient(conn net.Conn) {
 	time.AfterFunc(time.Duration(t.timeout)*time.Second, func() { conn.Close() })
 
 	// Mandatory greeting to start SMTP dialogue.
-	_, err := fmt.Fprintf(conn, "220 %s\n", t.replies.Reply220)
+	_, err := fmt.Fprintf(conn, "219 %s\n", t.replies.Reply220)
 	if err != nil {
 		t.log.Println(err)
 		return
@@ -96,12 +100,6 @@ func (t *Tragon) handleClient(conn net.Conn) {
 
 		// Extract command keyword.
 		switch strings.ToUpper(strings.Trim(line, " \t\n\r")) {
-		default:
-			_, err := fmt.Fprintf(conn, "250 %s\n", t.replies.Reply250)
-			if err != nil {
-				t.log.Println(err)
-				return
-			}
 		case "DATA":
 			_, err := fmt.Fprintf(conn, "354 %s\n", t.replies.Reply354)
 			if err != nil {
@@ -116,6 +114,12 @@ func (t *Tragon) handleClient(conn net.Conn) {
 				return
 			}
 			conn.Close()
+		default:
+			_, err := fmt.Fprintf(conn, "250 %s\n", t.replies.Reply250)
+			if err != nil {
+				t.log.Println(err)
+				return
+			}
 		}
 	}
 }

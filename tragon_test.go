@@ -1,9 +1,10 @@
 package tragon
 
 import (
+	"bufio"
 	"bytes"
 	"errors"
-	"fmt"
+	"io"
 	"log"
 	"net"
 	"os"
@@ -12,35 +13,60 @@ import (
 )
 
 const (
-	delta       = 1
 	testTimeout = 1
+	delta       = 1
 )
 
-var errTimeout error = errors.New("timeout")
+func newConnMock(session []byte) connMock {
+	buf := bytes.NewBuffer(session)
+	r := bufio.NewReader(buf)
+	w := bufio.NewWriter(buf)
+	return connMock{r: r, w: w}
+}
+
+type connMock struct {
+	net.Conn
+	r io.Reader
+	w io.Writer
+}
+
+func (cm connMock) Read(b []byte) (int, error) {
+	return cm.r.Read(b)
+}
+
+func (cm connMock) Write(p []byte) (int, error) {
+	return cm.w.Write(p)
+}
+
+func (cm connMock) Close() error {
+	return nil
+}
+
+var errTimeout = errors.New("timeout")
 
 type testCase struct {
 	Name     string
-	Session  string
+	Session  []byte
 	WantData []byte
 }
 
-var testSuite []testCase = []testCase{
+var testSuite = []testCase{
 	testCase{
 		Name: "email",
-		Session: `HELO tragon
+		Session: []byte(`HELO tragon
 MAIL FROM: tragon@example.com
 RCPT TO: tragon@example.com
 DATA
 This is a test of a simple email.
 .
 QUIT
-`,
+`),
 		WantData: []byte(`This is a test of a simple email.
 `),
 	},
 	testCase{
 		Name: "email-with-headers",
-		Session: `HELO tragon
+		Session: []byte(`HELO tragon
 MAIL FROM: tragon@example.com
 RCPT TO: tragon@example.com
 DATA
@@ -49,7 +75,7 @@ Subject: Email with headers
 This is a test of an email with headers.
 .
 QUIT
-`,
+`),
 		WantData: []byte(`Content-Language: en
 Subject: Email with headers
 This is a test of an email with headers.
@@ -57,24 +83,23 @@ This is a test of an email with headers.
 	},
 	testCase{
 		Name: "email-incomplete",
-		Session: `HELO tragon
+		Session: []byte(`HELO tragon
 MAIL FROM: tragon@example.com
 RCPT TO: tragon@example.com
 DATA
 This is the start of an email that will never finish.
-`,
+`),
 		WantData: []byte(`This is the start of an email that will never finish.
 `),
 	},
 }
 
-func TestHandleMessages(t *testing.T) {
+func TestHandleClient(t *testing.T) {
 	logger := log.New(os.Stderr, "tragon: ", log.Llongfile)
 
 	for _, tc := range testSuite {
 		log.Printf("running \"%v\" test", tc.Name)
 
-		var err error
 		var data []byte
 		var wg sync.WaitGroup
 
@@ -83,17 +108,12 @@ func TestHandleMessages(t *testing.T) {
 			data = message
 			wg.Done()
 		})
-		s.ListenAndServe()
 
-		conn, err := net.Dial("tcp", s.addr)
-		if err != nil {
-			t.Fatal(err)
-		}
-
-		fmt.Fprintf(conn, tc.Session)
+		conn := newConnMock(tc.Session)
+		s.handleClient(conn)
+		conn.Write(tc.Session)
 
 		wg.Wait()
-		conn.Close()
 
 		if bytes.Compare(data, tc.WantData) != 0 {
 			t.Fatalf("expected \"%s\", got \"%s\"", tc.WantData, data)
