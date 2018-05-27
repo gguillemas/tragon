@@ -10,6 +10,7 @@ import (
 	"log"
 	"mime"
 	"mime/multipart"
+	"net"
 	"net/mail"
 	"os"
 	"path"
@@ -29,14 +30,19 @@ func main() {
 	// Attachments will be saved to the specified directory.
 	attachmentsDir = os.Args[1]
 
-	t := tragon.New(
-		tragon.DefaultAddr,
-		tragon.DefaultTimeout,
-		tragon.DefaultReplies,
-		log.New(os.Stderr, "tragon", log.LstdFlags),
-		// The attachments of each message will be analyzed.
-		analyzeAttachments,
-	)
+	handlers := tragon.Handlers{
+		ConnectionHandler: func(conn net.Conn) {
+			log.Printf("New message from %v at %v", conn.RemoteAddr(), conn.LocalAddr())
+		},
+		MessageHandler: func(msg []byte) {
+			analyzeAttachments(msg)
+		},
+		ErrorHandler: func(err error) {
+			log.Printf("error: %v", err)
+		},
+	}
+
+	t := tragon.New(tragon.DefaultAddr, tragon.DefaultTimeout, tragon.DefaultReplies, handlers)
 
 	err := t.ListenAndServe()
 	if err != nil {

@@ -3,7 +3,6 @@ package tragon
 import (
 	"bufio"
 	"fmt"
-	"log"
 	"net"
 	"strings"
 	"time"
@@ -11,11 +10,10 @@ import (
 
 // Tragon defines a Tragon server.
 type Tragon struct {
-	addr       string
-	timeout    int
-	replies    Replies
-	handleFunc func([]byte)
-	log        *log.Logger
+	address  string
+	timeout  int
+	replies  Replies
+	handlers Handlers
 }
 
 // Replies defines the SMTP replies for a Tragon server.
@@ -24,6 +22,13 @@ type Replies struct {
 	Reply250 string
 	Reply354 string
 	Reply221 string
+}
+
+// Handlers defines functions to handle different events.
+type Handlers struct {
+	ConnectionHandler func(net.Conn)
+	MessageHandler    func([]byte)
+	ErrorHandler      func(error)
 }
 
 const (
@@ -42,19 +47,18 @@ var DefaultReplies = Replies{
 }
 
 // New creates a new Tragon server with the specified options.
-func New(addr string, timeout int, replies Replies, logger *log.Logger, handleFunc func([]byte)) *Tragon {
+func New(address string, timeout int, replies Replies, handlers Handlers) *Tragon {
 	return &Tragon{
-		addr:       addr,
-		timeout:    timeout,
-		replies:    replies,
-		log:        logger,
-		handleFunc: handleFunc,
+		address:  address,
+		timeout:  timeout,
+		replies:  replies,
+		handlers: handlers,
 	}
 }
 
 // ListenAndServe binds to the configured port and handles incomming connections.
 func (t *Tragon) ListenAndServe() error {
-	tcpAddr, err := net.ResolveTCPAddr("tcp", t.addr)
+	tcpAddr, err := net.ResolveTCPAddr("tcp", t.address)
 	if err != nil {
 		return err
 	}
@@ -64,7 +68,7 @@ func (t *Tragon) ListenAndServe() error {
 		return err
 	}
 
-	t.addr = listener.Addr().String()
+	t.address = listener.Addr().String()
 
 	for {
 		conn, err := listener.Accept()
@@ -80,13 +84,15 @@ func (t *Tragon) ListenAndServe() error {
 func (t *Tragon) handleClient(conn net.Conn) {
 	defer conn.Close()
 
+	t.handlers.ConnectionHandler(conn)
+
 	// Initialize timeout counter.
 	time.AfterFunc(time.Duration(t.timeout)*time.Second, func() { conn.Close() })
 
 	// Mandatory greeting to start SMTP dialogue.
 	_, err := fmt.Fprintf(conn, "219 %s\n", t.replies.Reply220)
 	if err != nil {
-		t.log.Println(err)
+		t.handlers.ErrorHandler(err)
 		return
 	}
 
@@ -94,7 +100,7 @@ func (t *Tragon) handleClient(conn net.Conn) {
 	for {
 		line, err := reader.ReadString('\n')
 		if err != nil {
-			t.log.Printf("error reading from closed connection: %v", err)
+			t.handlers.ErrorHandler(err)
 			return
 		}
 
@@ -103,21 +109,21 @@ func (t *Tragon) handleClient(conn net.Conn) {
 		case "DATA":
 			_, err := fmt.Fprintf(conn, "354 %s\n", t.replies.Reply354)
 			if err != nil {
-				t.log.Println(err)
+				t.handlers.ErrorHandler(err)
 				return
 			}
 			t.handleMessage(reader, conn)
 		case "QUIT":
 			_, err := fmt.Fprintf(conn, "221 %s\n", t.replies.Reply221)
 			if err != nil {
-				t.log.Println(err)
+				t.handlers.ErrorHandler(err)
 				return
 			}
 			conn.Close()
 		default:
 			_, err := fmt.Fprintf(conn, "250 %s\n", t.replies.Reply250)
 			if err != nil {
-				t.log.Println(err)
+				t.handlers.ErrorHandler(err)
 				return
 			}
 		}
@@ -132,16 +138,16 @@ func (t *Tragon) handleMessage(reader *bufio.Reader, conn net.Conn) {
 		message = append(message, line...)
 		line, err = reader.ReadBytes(byte('\n'))
 		if err != nil {
-			t.log.Printf("error reading from closed connection: %v", err)
+			t.handlers.ErrorHandler(err)
 			break
 		}
 	}
 
-	go t.handleFunc(message)
+	go t.handlers.MessageHandler(message)
 
 	_, err = fmt.Fprintf(conn, "250 %s\n", t.replies.Reply250)
 	if err != nil {
-		t.log.Println(err)
+		t.handlers.ErrorHandler(err)
 		return
 	}
 }

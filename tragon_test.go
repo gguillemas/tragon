@@ -76,10 +76,22 @@ func TestHandleClient(t *testing.T) {
 		var wg sync.WaitGroup
 
 		wg.Add(1)
-		s := New(":0", testTimeout, DefaultReplies, logger, func(m []byte) {
-			message = m
-			wg.Done()
-		})
+
+		handlers := Handlers{
+			ConnectionHandler: func(conn net.Conn) {
+				logger.Printf("Recieved connection")
+			},
+			MessageHandler: func(msg []byte) {
+				logger.Printf("Got message of length: %v", len(msg))
+				message = msg
+				wg.Done()
+			},
+			ErrorHandler: func(err error) {
+				logger.Printf("Got error: %v", err)
+			},
+		}
+
+		s := New(":0", testTimeout, DefaultReplies, handlers)
 
 		session, err := ioutil.ReadFile(tc.SessionFile)
 		if err != nil {
