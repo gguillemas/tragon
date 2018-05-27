@@ -17,6 +17,14 @@ This package is **not** intended to be used for:
 - Building fully working SMTP servers.
 - Building interactive mocks of SMTP servers.
 
+## Features
+
+- Always replies positively.
+- Customizable SMTP reply messages.
+- Customizable connection handling.
+- Costomizable message handling.
+- Customizable errror handling.
+
 ## Installation
 
 Execute:
