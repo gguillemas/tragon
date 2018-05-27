@@ -1,5 +1,7 @@
 # Tragon
 
+[![GoDoc](https://godoc.org/github.com/gguillemas/tragon?status.svg)](https://godoc.org/github.com/gguillemas/tragon)
+
 Tragon is a minimal Go package to build fake SMTP servers that process all incoming data.
 
 The use cases for such servers can be:
@@ -17,7 +19,21 @@ This package is **not** intented to be used for:
 
 ## Installation
 
-```go get github.com/gguillemas/tragon```
+Execute:
+
+```
+go get github.com/gguillemas/tragon
+```
+
+## Documentation
+
+Execute:
+
+```
+$ go doc github.com/gguillemas/tragon
+```
+
+Or visit [godoc.org](https://godoc.org/github.com/gguillemas/tragon) to read it online.
 
 ## Example
 
