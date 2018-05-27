@@ -3,8 +3,8 @@ package tragon
 import (
 	"bufio"
 	"bytes"
-	"errors"
 	"io"
+	"io/ioutil"
 	"log"
 	"net"
 	"os"
@@ -42,55 +42,27 @@ func (cm connMock) Close() error {
 	return nil
 }
 
-var errTimeout = errors.New("timeout")
-
 type testCase struct {
-	Name     string
-	Session  []byte
-	WantData []byte
+	Name        string
+	SessionFile string
+	MessageFile string
 }
 
 var testSuite = []testCase{
 	testCase{
-		Name: "email",
-		Session: []byte(`HELO tragon
-MAIL FROM: tragon@example.com
-RCPT TO: tragon@example.com
-DATA
-This is a test of a simple email.
-.
-QUIT
-`),
-		WantData: []byte(`This is a test of a simple email.
-`),
+		Name:        "basic",
+		SessionFile: "test/sessions/basic",
+		MessageFile: "test/messages/basic",
 	},
 	testCase{
-		Name: "email-with-headers",
-		Session: []byte(`HELO tragon
-MAIL FROM: tragon@example.com
-RCPT TO: tragon@example.com
-DATA
-Content-Language: en
-Subject: Email with headers
-This is a test of an email with headers.
-.
-QUIT
-`),
-		WantData: []byte(`Content-Language: en
-Subject: Email with headers
-This is a test of an email with headers.
-`),
+		Name:        "headers",
+		SessionFile: "test/sessions/headers",
+		MessageFile: "test/messages/headers",
 	},
 	testCase{
-		Name: "email-incomplete",
-		Session: []byte(`HELO tragon
-MAIL FROM: tragon@example.com
-RCPT TO: tragon@example.com
-DATA
-This is the start of an email that will never finish.
-`),
-		WantData: []byte(`This is the start of an email that will never finish.
-`),
+		Name:        "incomplete",
+		SessionFile: "test/sessions/incomplete",
+		MessageFile: "test/messages/incomplete",
 	},
 }
 
@@ -100,23 +72,32 @@ func TestHandleClient(t *testing.T) {
 	for _, tc := range testSuite {
 		log.Printf("running \"%v\" test", tc.Name)
 
-		var data []byte
+		var message []byte
 		var wg sync.WaitGroup
 
 		wg.Add(1)
-		s := New(":0", testTimeout, DefaultReplies, logger, func(message []byte) {
-			data = message
+		s := New(":0", testTimeout, DefaultReplies, logger, func(m []byte) {
+			message = m
 			wg.Done()
 		})
 
-		conn := newConnMock(tc.Session)
+		session, err := ioutil.ReadFile(tc.SessionFile)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		conn := newConnMock(session)
 		s.handleClient(conn)
-		conn.Write(tc.Session)
 
 		wg.Wait()
 
-		if bytes.Compare(data, tc.WantData) != 0 {
-			t.Fatalf("expected \"%s\", got \"%s\"", tc.WantData, data)
+		wantMessage, err := ioutil.ReadFile(tc.MessageFile)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		if bytes.Compare(message, wantMessage) != 0 {
+			t.Fatalf("expected \"%v\", got \"%v\"", wantMessage, message)
 		}
 	}
 }

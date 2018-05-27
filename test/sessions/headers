@@ -1,0 +1,10 @@
+HELO tragon
+MAIL FROM: tragon@example.com
+RCPT TO: tragon@example.com
+DATA
+Content-Language: en
+Subject: Email with headers
+This is a test of an email with headers.
+.
+QUIT
+

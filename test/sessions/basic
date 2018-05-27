@@ -1,0 +1,8 @@
+HELO tragon
+MAIL FROM: tragon@example.com
+RCPT TO: tragon@example.com
+DATA
+This is a test of a simple email.
+.
+QUIT
+
