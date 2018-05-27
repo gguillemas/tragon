@@ -12,7 +12,7 @@ The use cases for such servers can be:
 - Harvesting email addresses.
 - Collecting email spam.
 
-This package is **not** intented to be used for:
+This package is **not** intended to be used for:
 
 - Building fully working SMTP servers.
 - Building interactive mocks of SMTP servers.
@@ -30,7 +30,7 @@ go get github.com/gguillemas/tragon
 Execute:
 
 ```
-$ go doc github.com/gguillemas/tragon
+go doc github.com/gguillemas/tragon
 ```
 
 Or visit [godoc.org](https://godoc.org/github.com/gguillemas/tragon) to read it online.
