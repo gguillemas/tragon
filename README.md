@@ -22,7 +22,7 @@ This package is **not** intended to be used for:
 - Always replies positively.
 - Customizable SMTP reply messages.
 - Customizable connection handling.
-- Costomizable message handling.
+- Customizable message handling.
 - Customizable errror handling.
 
 ## Installation
